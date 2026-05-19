@@ -470,6 +470,16 @@ def run(
             tracer.close()
             return False
 
+        #  Reviewer 复活检测（dead 标记后评分恢复 >0）
+        if rev_a_dead and result_a.total_score > 0:
+            rev_a_dead = False
+            print("  ✅ Reviewer A 已恢复，重启双 Reviewer 模式")
+            tracer.decision("reviewer_revived", "rev_a", round_num=round_num)
+        if rev_b_dead and result_b.total_score > 0:
+            rev_b_dead = False
+            print("  ✅ Reviewer B 已恢复，重启双 Reviewer 模式")
+            tracer.decision("reviewer_revived", "rev_b", round_num=round_num)
+
         # ── 收集活跃 Reviewer ───────────────────────────
         active_reviewers = []
         if pkg.reviewer_a:
