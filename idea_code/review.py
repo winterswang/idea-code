@@ -254,11 +254,36 @@ def converge_check(
 def merge_feedback(review_a: ReviewResult, review_b: ReviewResult) -> str:
     """合并两个 Reviewer 的反馈，生成给 Builder 的综合输入。
 
-    包含：逐维度评审结果（得分 + 评语）、阻塞性问题、改进建议。
+    包含：修复优先级排序、逐维度评审结果、阻塞性问题、改进建议。
     """
     parts = []
 
-    # 逐维度评审结果
+    # ── 修复优先级（新增） ──
+    parts.append("## 修复优先级（按影响排序，请从上到下处理）\n")
+    # 1. 阻塞性问题（最高优先级）
+    all_blocks = [(f"[{review_a.reviewer}]", b) for b in review_a.blocking_issues] + \
+                 [(f"[{review_b.reviewer}]", b) for b in review_b.blocking_issues]
+    if all_blocks:
+        parts.append("### 🔴 阻塞性问题（必须修复，否则文档不可交付）")
+        for src, b in all_blocks:
+            parts.append(f"- {src} {b}")
+    # 2. 低分维度（得分率 < 70%）
+    low_dims = []
+    for result, label in [(review_a, review_a.reviewer), (review_b, review_b.reviewer)]:
+        for dim in result.dimensions:
+            if not isinstance(dim, dict):
+                continue
+            score = dim.get("score", 0)
+            max_s = dim.get("max", 1) or 1
+            if score / max_s < 0.7:
+                low_dims.append(f"[{label}] {dim.get('name','?')}: {score}/{max_s}")
+    if low_dims:
+        parts.append("\n### 🟡 需提升维度（得分率 < 70%）")
+        for ld in low_dims:
+            parts.append(f"- {ld}")
+        parts.append("")
+
+    # ── 逐维度评审结果 ──
     parts.append("## 逐维度评审结果\n")
     for reviewer, result in [(review_a.reviewer, review_a), (review_b.reviewer, review_b)]:
         if not reviewer or not result.dimensions:
