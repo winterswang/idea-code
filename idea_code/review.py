@@ -254,19 +254,30 @@ def converge_check(
 def merge_feedback(review_a: ReviewResult, review_b: ReviewResult) -> str:
     """合并两个 Reviewer 的反馈，生成给 Builder 的综合输入。
 
-    包含：修复优先级排序、逐维度评审结果、阻塞性问题、改进建议。
+    包含：阻塞问题分类追踪、修复优先级排序、逐维度评审结果、改进建议。
     """
     parts = []
+
+    # ── 阻塞问题分类追踪（O(1)规则引擎） ──
+    all_blocks_with_src = \
+        [(review_a.reviewer, b) for b in review_a.blocking_issues] + \
+        [(review_b.reviewer, b) for b in review_b.blocking_issues]
+    if all_blocks_with_src:
+        parts.append("## 阻塞问题追踪\n")
+        parts.append("| # | 类型 | 来源 | 问题描述 |")
+        parts.append("|---|------|------|---------|")
+        for i, (src, issue) in enumerate(all_blocks_with_src, 1):
+            cat = _classify_issue(issue)
+            parts.append(f"| {i} | [{cat}] | {src} | {issue} |")
+        parts.append("")
 
     # ── 修复优先级（新增） ──
     parts.append("## 修复优先级（按影响排序，请从上到下处理）\n")
     # 1. 阻塞性问题（最高优先级）
-    all_blocks = [(f"[{review_a.reviewer}]", b) for b in review_a.blocking_issues] + \
-                 [(f"[{review_b.reviewer}]", b) for b in review_b.blocking_issues]
-    if all_blocks:
+    if all_blocks_with_src:
         parts.append("### 🔴 阻塞性问题（必须修复，否则文档不可交付）")
-        for src, b in all_blocks:
-            parts.append(f"- {src} {b}")
+        for src, b in all_blocks_with_src:
+            parts.append(f"- [{src}] {b}")
     # 2. 低分维度（得分率 < 70%）
     low_dims = []
     for result, label in [(review_a, review_a.reviewer), (review_b, review_b.reviewer)]:
@@ -327,6 +338,23 @@ def merge_feedback(review_a: ReviewResult, review_b: ReviewResult) -> str:
         parts.append(f"{review_b.reviewer}反馈: {review_b.feedback_for_builder}")
 
     return "\n".join(parts)
+
+
+# ── 阻塞问题分类引擎（O(1) 关键词规则，零 LLM 调用） ──
+_ARCH_PATTERNS = ["互斥", "矛盾", "不一致", "冲突", "二选一"]
+_MISSING_PATTERNS = ["缺失", "缺少", "未定义", "未覆盖", "未考虑", "未处理", "零覆盖", "完全缺失"]
+_FACT_PATTERNS = ["错误", "不准确", "不可靠", "编造"]
+
+
+def _classify_issue(issue: str) -> str:
+    """将阻塞问题分类为 架构矛盾 | 缺失覆盖 | 事实错误 | 通用改进。"""
+    if any(p in issue for p in _FACT_PATTERNS) or "来源缺失" in issue or "来源未标注" in issue:
+        return "事实错误"
+    if any(p in issue for p in _ARCH_PATTERNS):
+        return "架构矛盾"
+    if any(p in issue for p in _MISSING_PATTERNS):
+        return "缺失覆盖"
+    return "通用改进"
 
 
 def scoring_table_to_markdown(scoring: list, philosophy: str = "") -> str:
