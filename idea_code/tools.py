@@ -88,13 +88,24 @@ def run_web_search(query: str, max_results: int = 5) -> str:
     """Web search. Backend selected by SEARCH_PROVIDER env var.
 
     Supported: bigmodel (default), minimax (requires mmx-cli).
+    Falls back gracefully when no API key configured.
     """
     import os
     provider = os.getenv("SEARCH_PROVIDER", "bigmodel")
 
     if provider == "minimax":
-        return _search_via_minimax_cli(query, max_results)
-    return _search_via_bigmodel(query, max_results)
+        result = _search_via_minimax_cli(query, max_results)
+    else:
+        result = _search_via_bigmodel(query, max_results)
+
+    # 退化提示：两个后端都不可用时，告知 Builder 可降级运行
+    if result.startswith("Error:"):
+        return (
+            f"{result}\n\n"
+            "⚠️  搜索功能当前不可用（未配置 API Key）。你可以基于训练数据中的知识继续工作，"
+            "但在输出中应明确标注「以下信息来自模型预训练知识，未经验证」。"
+        )
+    return result
 
 
 def _search_via_bigmodel(query: str, max_results: int) -> str:
