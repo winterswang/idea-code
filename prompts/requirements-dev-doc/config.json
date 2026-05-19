@@ -1,0 +1,28 @@
+{
+  "id": "requirements-dev-doc",
+  "label": "研发需求文档生成",
+  "description": "面向软件工程的标准需求文档，结构化、可追踪、coding agent 友好",
+  "output_file": "requirements.md",
+  "input": { "type": "seed_text" },
+  "reviewer_count": 2,
+  "builder": {
+    "role": "资深产品架构师",
+    "model": "IDEA",
+    "prompt_file": "builder.md",
+    "context_file": "builder-context.md"
+  },
+  "reviewer_a": {
+    "name": "技术视角",
+    "model": "REV_A",
+    "prompt_file": "reviewer-a.md",
+    "context_file": "reviewer-a-context.md",
+    "scoring_file": "scoring-a.json"
+  },
+  "reviewer_b": {
+    "name": "产品视角",
+    "model": "REV_B",
+    "prompt_file": "reviewer-b.md",
+    "context_file": "reviewer-b-context.md",
+    "scoring_file": "scoring-b.json"
+  }
+}

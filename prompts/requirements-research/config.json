@@ -1,0 +1,28 @@
+{
+  "id": "requirements-research",
+  "label": "调研报告生成",
+  "description": "面向分析调研类的结构化报告，强调论证深度、信息可信度、结论价值",
+  "output_file": "report.md",
+  "input": { "type": "seed_text" },
+  "reviewer_count": 2,
+  "builder": {
+    "role": "资深行业分析师",
+    "model": "IDEA",
+    "prompt_file": "builder.md",
+    "context_file": "builder-context.md"
+  },
+  "reviewer_a": {
+    "name": "严谨性视角",
+    "model": "REV_A",
+    "prompt_file": "reviewer-a.md",
+    "context_file": "reviewer-a-context.md",
+    "scoring_file": "scoring-a.json"
+  },
+  "reviewer_b": {
+    "name": "价值视角",
+    "model": "REV_B",
+    "prompt_file": "reviewer-b.md",
+    "context_file": "reviewer-b-context.md",
+    "scoring_file": "scoring-b.json"
+  }
+}

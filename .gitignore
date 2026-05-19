@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# Environment (contains API keys)
+.env
+
+# Project outputs
+projects/
+.transcripts/
+
+# IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Test artifacts
+.pytest_cache/

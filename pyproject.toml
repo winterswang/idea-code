@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "idea-code"
+version = "0.1.0"
+description = "多 agent 文档生成与代码审查工具"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.25.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+idea-code = "idea_code.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["idea_code*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["projects", ".transcripts", "__pycache__"]
