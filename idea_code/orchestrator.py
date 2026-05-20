@@ -445,16 +445,16 @@ def run(
         if pkg.reviewer_b and not rev_b_dead:
             reviewer_scores.append(result_b.total_score)
 
-        # 逐 Reviewer 标记失效（连续 2 轮 0 分）
-        if pkg.reviewer_a and result_a.total_score == 0:
+        # 逐 Reviewer 标记失效（连续 2 轮解析失败，非评分 0 分）
+        if pkg.reviewer_a and result_a.total_score == 0 and result_a.error:
             rev_a_fails = scores_history[-2:] if len(scores_history) >= 2 else []
             rev_a_fails = [s for s in rev_a_fails if s.get("reviewer_a_score", 0) == 0]
-            if len(rev_a_fails) >= 1:  # 本轮0分 + 上轮0分 = 2连败
+            if len(rev_a_fails) >= 1:
                 if not rev_a_dead:
                     rev_a_dead = True
                     print("  ⚠️  Reviewer A 连续失效，切换为单 Reviewer B 模式")
                     tracer.decision("reviewer_dead", "rev_a", round_num=round_num)
-        if pkg.reviewer_b and result_b.total_score == 0:
+        if pkg.reviewer_b and result_b.total_score == 0 and result_b.error:
             rev_b_fails = scores_history[-2:] if len(scores_history) >= 2 else []
             rev_b_fails = [s for s in rev_b_fails if s.get("reviewer_b_score", 0) == 0]
             if len(rev_b_fails) >= 1:
@@ -531,14 +531,19 @@ def run(
 
         if total_ok and intent_ok and per_dim_ok:
             converged = True
-            print(f"\n✅ 收敛！")
+            degraded = rev_a_dead or rev_b_dead
+            if degraded:
+                print(f"\n✅ 收敛（⚠️ 单 Reviewer 审核 — {'仅 RevA' if not rev_b_dead else '仅 RevB'}）")
+            else:
+                print(f"\n✅ 收敛！")
             scores_str = ", ".join(f"{label}={r.total_score}" for label, r in active_reviewers)
             intent_str = ", ".join(
                 f"{label}意图={extract_dimension_score(r.dimensions, INTENT_DIM_NAME)}/30"
                 for label, r in active_reviewers
             )
-            tracer.decision("convergence", "converged", round_num=round_num,
-                            scores=scores_str, intent=intent_str)
+            tracer.decision("convergence", "converged" if not degraded else "converged_degraded",
+                            round_num=round_num, scores=scores_str, intent=intent_str,
+                            degraded=degraded)
             for label, r in active_reviewers:
                 intent = extract_dimension_score(r.dimensions, INTENT_DIM_NAME)
                 intent_str = f" 意图{intent}/30" if intent is not None else ""
