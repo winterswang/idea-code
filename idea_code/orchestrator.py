@@ -631,6 +631,13 @@ def run(
             except Exception:
                 pass
 
+        # ── 近收敛检测 ──
+        last_a = last.get('reviewer_a_score', 0)
+        last_b = last.get('reviewer_b_score', 0)
+        if last_a >= 88 and last_b >= 88:
+            print(f"\n  💡 评分已接近收敛阈值（A={last_a}, B={last_b}），建议：")
+            print(f"     --max-rounds {max_rounds + 3}  继续迭代 2-3 轮大概率收敛")
+
     tracer.set_rounds(len(scores_history))
     logger.save()
     save_state(slug=slug, seed=seed, package_id=pkg.id,
