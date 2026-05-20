@@ -1,6 +1,7 @@
 # idea-code 开发约定
 
 > 每次代码变更后，AI 助手应自动更新对应的项目文档。
+> 自动化规则见 `.claude/skills/idea-code-docs/SKILL.md`
 
 ## 文档更新映射
 
