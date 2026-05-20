@@ -43,3 +43,7 @@
 - #28 scoring_table 未渲染 → render_reviewer_prompt 增加参数
 - #29 总分≠维度之和 → validate_dimension_total()
 - #30 降级永久失效 → 评分恢复自动复活
+
+## 信息流 (#31-#32)
+- #31 Builder Round2+ 缺 read_file 指引 → builder-context.md 区分首轮/后续轮
+- #32 输出模板过于宽松 → 7章50行规范化（角色/接口/异常/架构/MVP/术语）
