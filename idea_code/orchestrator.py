@@ -495,16 +495,25 @@ def run(
             return False
 
         # ── 收敛判定 ─────────────────────────────────────
+        # 从 Reviewer 配置读取通过阈值（支持不同包不同阈值）
+        threshold_a = pkg.reviewer_a.pass_threshold if pkg.reviewer_a else 95
+        threshold_b = pkg.reviewer_b.pass_threshold if pkg.reviewer_b else 95
+
         # 单 Reviewer 降级模式：仅要求存活 Reviewer 通过
         if rev_a_dead or rev_b_dead:
             alive = [r for _, r in active_reviewers if r.total_score > 0]
-            total_ok = alive and all(r.total_score >= 95 for r in alive)
+            alive_labels = [label for label, r in active_reviewers if r.total_score > 0]
+            total_ok = alive and all(
+                r.total_score >= (threshold_a if lbl == "A" else threshold_b)
+                for r, lbl in zip(alive, alive_labels)
+            )
             intent_ok = alive and all(
                 (extract_dimension_score(r.dimensions, INTENT_DIM_NAME) or 30) >= int(INTENT_MAX_SCORE * 0.90)
                 for r in alive
             )
         else:
-            total_ok = all(r.total_score >= 95 for _, r in active_reviewers)
+            total_ok = all(r.total_score >= (threshold_a if label == "A" else threshold_b)
+                          for label, r in active_reviewers)
             intent_ok = True
             for _, r in active_reviewers:
                 intent = extract_dimension_score(r.dimensions, INTENT_DIM_NAME)
@@ -565,14 +574,38 @@ def run(
         logger.round_end(round_num, result_a.total_score, result_b.total_score, converged=False)
 
         # ── 合并 feedback ────────────────────────────────
-        feedback = merge_feedback(result_a, result_b)
-        if not feedback.strip():
+        # 过滤 score=0 的 dead Reviewer（避免噪声）
+        for_merge = []
+        if result_a.total_score > 0:
+            for_merge.append(result_a)
+        if result_b.total_score > 0:
+            for_merge.append(result_b)
+        if len(for_merge) == 2:
+            feedback = merge_feedback(result_a, result_b)
+        elif len(for_merge) == 1:
+            feedback = merge_feedback(for_merge[0], ReviewResult())
+        else:
+            feedback = "本轮无有效评审结果，请检查 Reviewer 配置和网络连接。"
+
+        if not feedback.strip() or feedback == "本轮无有效评审结果，请检查 Reviewer 配置和网络连接。":
             feedback = "本轮 Reviewer 评分解析异常，请检查文档格式并尝试改进。"
-        print(f"     阻塞问题: {len(result_a.blocking_issues) + len(result_b.blocking_issues)} 个")
-        print(f"     建议: {len(result_a.suggestions) + len(result_b.suggestions)} 条\n")
+        blk = sum(len(r.blocking_issues) for r in for_merge)
+        sug = sum(len(r.suggestions) for r in for_merge)
+        print(f"     阻塞问题: {blk} 个")
+        print(f"     建议: {sug} 条\n")
         tracer.step("round_end", round_num=round_num,
-                    blocks=len(result_a.blocking_issues) + len(result_b.blocking_issues),
-                    suggestions=len(result_a.suggestions) + len(result_b.suggestions))
+                    blocks=blk, suggestions=sug)
+
+        # ── 停滞检测（最近 3 轮评分无改善时告警） ──
+        if len(scores_history) >= 3:
+            last3_a = [s["reviewer_a_score"] for s in scores_history[-3:]]
+            last3_b = [s["reviewer_b_score"] for s in scores_history[-3:]]
+            var_a = max(last3_a) - min(last3_a) if last3_a else 0
+            var_b = max(last3_b) - min(last3_b) if last3_b else 0
+            if var_a < 2 and var_b < 2 and not converged:
+                print(f"  ⚠️  评分停滞（最近3轮 A={last3_a} B={last3_b}），建议手动介入检查")
+                tracer.step("stagnation_warning", round_num=round_num,
+                            last3_a=str(last3_a), last3_b=str(last3_b))
 
     # ── 最终状态 ─────────────────────────────────────────
     if not converged:
