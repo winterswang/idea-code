@@ -19,3 +19,6 @@ projects/
 
 # Test artifacts
 .pytest_cache/
+
+# Local E2E test scripts
+_e2e_*.py
