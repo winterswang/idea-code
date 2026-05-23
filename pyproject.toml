@@ -4,12 +4,18 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "idea-code"
-version = "0.1.0"
+version = "0.4.1"
 description = "多 agent 文档生成与代码审查工具"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.25.0",
     "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
 ]
 
 [project.scripts]
