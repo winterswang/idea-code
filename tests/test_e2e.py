@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest
 from idea_code.prompts.manager import get_registry
 from idea_code.orchestrator import run
 from idea_code.state import load_state
@@ -25,6 +26,7 @@ def red(s): return f"\033[31m{s}\033[0m"
 def bold(s): return f"\033[1m{s}\033[0m"
 
 
+@pytest.mark.skipif(not os.getenv("IDEA_API_KEY"), reason="需要 API Key，跳过以避免费用")
 def test_dev_doc_e2e():
     seed = "一个命令行待办清单工具，支持添加任务、删除任务、标记完成、查看列表"
     print(bold("\n=== Test 1: dev-doc ===\n"))
@@ -62,6 +64,7 @@ def test_dev_doc_e2e():
     return all(v for _, v in checks) and success
 
 
+@pytest.mark.skipif(not os.getenv("IDEA_API_KEY"), reason="需要 API Key，跳过以避免费用")
 def test_research_e2e():
     seed = "调研当前主流 Python Web 框架（Flask、Django、FastAPI）的现状、特点和适用场景"
     print(bold("\n=== Test 2: research ===\n"))
@@ -93,6 +96,7 @@ def test_research_e2e():
     return all(v for _, v in checks) and success
 
 
+@pytest.mark.skipif(not os.getenv("IDEA_API_KEY"), reason="需要 API Key，跳过以避免费用")
 def test_resume_e2e():
     seed = "一个简单的天气查询 CLI 工具"
     print(bold("\n=== Test 3: resume ===\n"))

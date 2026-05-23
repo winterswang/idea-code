@@ -312,14 +312,6 @@ def merge_feedback(review_a: ReviewResult, review_b: ReviewResult) -> str:
                 parts.append(f"  > {comment}")
         parts.append("")
 
-    if review_a.blocking_issues or review_b.blocking_issues:
-        parts.append("## 阻塞性问题（必须修复）")
-        for issue in review_a.blocking_issues:
-            parts.append(f"- [{review_a.reviewer}] {issue}")
-        for issue in review_b.blocking_issues:
-            parts.append(f"- [{review_b.reviewer}] {issue}")
-        parts.append("")
-
     if review_a.suggestions or review_b.suggestions:
         parts.append("## 改进建议")
         for sug in review_a.suggestions:

@@ -40,6 +40,26 @@ from .tracer import ExecutionTracer
 from .utils import slugify
 
 
+def _build_review_history(project_dir: Path, round_num: int, ctx) -> str:
+    """从 reviews/ 目录读取前 round_num-1 轮记录并 LLM 压缩。"""
+    if round_num <= 1:
+        return ""
+    reviews_dir = project_dir / "reviews"
+    if not reviews_dir.exists():
+        return ""
+    records = []
+    for i in range(1, round_num):
+        record_path = reviews_dir / f"round-{i:02d}.json"
+        if record_path.exists():
+            try:
+                records.append(json.loads(record_path.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    if not records:
+        return ""
+    return compact_review_history(records, ctx)
+
+
 def _format_scoring_table(scoring: list, philosophy: str = "") -> str:
     return scoring_table_to_markdown(scoring, philosophy)
 
@@ -107,25 +127,12 @@ def _run_reviewer(
             which, role_name=reviewer.name, scoring_philosophy=reviewer.scoring_philosophy, scoring_table=scoring_table
         )
 
-        # 构建历史评审摘要（#4）
-        review_history_summary = ""
-        if round_num > 1:
-            project_dir = Path(PROJECTS_DIR) / slugify(seed)
-            reviews_dir = project_dir / "reviews"
-            if reviews_dir.exists():
-                records = []
-                for i in range(1, round_num):
-                    record_path = reviews_dir / f"round-{i:02d}.json"
-                    if record_path.exists():
-                        try:
-                            records.append(json.loads(record_path.read_text(encoding="utf-8")))
-                        except Exception:
-                            pass
-                if records:
-                    review_history_summary = compact_review_history(records, ctx)
-                    if tracer:
-                        tracer.step("history_built", round_num=round_num, agent=f"reviewer-{which}",
-                                    prior_rounds=len(records))
+        # 构建历史评审摘要
+        project_dir = Path(PROJECTS_DIR) / slugify(seed)
+        review_history_summary = _build_review_history(project_dir, round_num, ctx)
+        if review_history_summary and tracer:
+            tracer.step("history_built", round_num=round_num, agent=f"reviewer-{which}",
+                        prior_rounds=round_num - 1)
 
         user = pkg.render_reviewer_context(
             which,
@@ -248,29 +255,11 @@ def run(
         print("  🏗️  Builder 生成中...")
         builder_system = pkg.render_builder_prompt(role_name=pkg.builder.role)
 
-        # 构建历史评审摘要传递给 Builder（Round 2+）
-        builder_history = ""
-        if round_num > 1:
-            reviews_dir = project_dir / "reviews"
-            if reviews_dir.exists():
-                records = []
-                for i in range(1, round_num):
-                    record_path = reviews_dir / f"round-{i:02d}.json"
-                    if record_path.exists():
-                        try:
-                            records.append(json.loads(record_path.read_text(encoding="utf-8")))
-                        except Exception:
-                            pass
-                if records:
-                    builder_history = compact_review_history(records, builder_ctx)
-                    tracer.step("history_built", round_num=round_num, agent="builder",
-                                prior_rounds=len(records))
-                else:
-                    builder_history = ""
-            else:
-                builder_history = ""
-        else:
-            builder_history = ""
+        # 构建历史评审摘要传递给 Builder
+        builder_history = _build_review_history(project_dir, round_num, builder_ctx)
+        if builder_history:
+            tracer.step("history_built", round_num=round_num, agent="builder",
+                        prior_rounds=round_num - 1)
 
         builder_user = pkg.render_builder_context(
             seed=seed,
@@ -316,7 +305,7 @@ def run(
 
         # 读取生成的文档
         if not output_file.exists():
-            tracer.step("output_missing", round_num=round_num, round=round_num)
+            tracer.step("output_missing", round_num=round_num)
             if round_num == 1:
                 print("  ❌ Round 1 Builder 未生成文件，终止流程")
                 tracer.decision("round1_no_output", "abort", round_num=round_num)

@@ -11,12 +11,11 @@ import re
 import time
 from pathlib import Path
 
-from .tools import WORKDIR
-
 TOKEN_THRESHOLD = 100_000
 KEEP_RECENT = 3
 PRESERVE_RESULT_TOOLS = {"read_file"}
-TRANSCRIPT_DIR = Path(WORKDIR) / ".transcripts"
+# transcripts 存在项目目录下而非 cwd
+TRANSCRIPT_DIR = Path(__file__).resolve().parent.parent / ".transcripts"
 
 _SENSITIVE_PATTERNS = re.compile(
     r'(sk-ant-[a-zA-Z0-9_-]+)'
