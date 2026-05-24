@@ -254,7 +254,6 @@ def run(
     if not feedback:
         feedback = "没有反馈信息，请按照相关要求设计需求文档"
     scores_history = []
-    consecutive_reviewer_failures = 0
     rev_a_dead = False
     rev_b_dead = False
     converged = False
@@ -528,8 +527,10 @@ def run(
                 if intent is not None and intent < int(INTENT_MAX_SCORE * 0.90):
                     intent_ok = False
 
-        # 逐维度门槛检查
+        # 逐维度门槛检查（预初始化 fail_* 避免后续 NameError）
         per_dim_ok = True
+        fail_a: list[str] = []
+        fail_b: list[str] = []
         if pkg.reviewer_a and result_a.dimensions and not rev_a_dead:
             ok_a, fail_a = check_per_dimension_threshold(result_a.dimensions, pkg.reviewer_a.scoring)
             per_dim_ok = per_dim_ok and ok_a
@@ -572,9 +573,9 @@ def run(
             print(f"   总分虽达 95，但文档可能偏离了种子核心意图，继续迭代。")
         elif not per_dim_ok:
             per_dim_detail = ""
-            if 'fail_a' in dir() and fail_a:
+            if fail_a:
                 per_dim_detail += f"RevA: {'; '.join(fail_a)}"
-            if 'fail_b' in dir() and fail_b:
+            if fail_b:
                 if per_dim_detail:
                     per_dim_detail += " | "
                 per_dim_detail += f"RevB: {'; '.join(fail_b)}"
