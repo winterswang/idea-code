@@ -308,7 +308,13 @@ orchestrator.run()
 
 ## 🔄 版本记录
 
-### v0.4.2 (当前) — 2026-05-24
+### v0.4.3 (当前) — 2026-05-25
+- **🐛 P0 修复: LLM 输出 null 导致进程崩溃 (#1)**: `raw.get("suggestions", [])` 在 JSON 值为 `null` 时返回 `None` → `len(None)` 崩溃。修复: `or []` 兜底 (review.py)
+- **🐛 P0 修复: --resume 忽略前轮反馈 (#1)**: `feedback` 未持久化到 `state.json`，resume 时 Builder 得到"没有反馈信息"。修复: 新增 `feedback` 字段到 state.json (state.py, orchestrator.py)
+- **🔧 P1 修复: DeepSeek thinking 吃掉全部 max_tokens 预算 (#1)**: 默认 Builder max_tokens 8000→16000；subagent.py 检测 ThinkingBlock-only 响应后自动以 2 倍 max_tokens 重试（最多 2 次）；agent_loop 透传 `stop_reason` 供调用方判断
+- **🧪 测试新增**: null JSON 字段反序列化测试 (test_review.py) + feedback 持久化测试 (test_state.py)
+
+### v0.4.2 — 2026-05-24
 - **tracer+compact 单元测试完成**: 16/16 全量测试覆盖
 - **全部 TODO 清空**: 累计任务项全部完成
 - **清理**: 删除根目录旧脚本、更新 README.md、更新 .gitignore

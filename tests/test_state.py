@@ -26,8 +26,29 @@ class TestStatePersistence:
             assert loaded["project"] == "test-project"
             assert loaded["seed"] == "测试种子"
             assert loaded["prompt_package"] == "requirements-dev-doc"
+            assert loaded["version"] == 2
             assert loaded["round"] == 3
             assert len(loaded["scores"]) == 1
+            assert loaded["feedback"] == ""
+
+    def test_save_with_feedback(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            monkeypatch.setattr("idea_code.state.PROJECTS_DIR", tmp)
+            monkeypatch.setattr("idea_code.config.PROJECTS_DIR", tmp)
+
+            save_state(
+                slug="test-feedback",
+                seed="恢复测试",
+                package_id="requirements-dev-doc",
+                round_num=2,
+                scores=[{"round": 1, "reviewer_a_score": 80, "reviewer_b_score": 90}],
+                feedback="阻塞问题: 缺少性能需求",
+            )
+
+            loaded = load_state("test-feedback")
+            assert loaded is not None
+            assert loaded["version"] == 2
+            assert loaded["feedback"] == "阻塞问题: 缺少性能需求"
 
     def test_load_nonexistent(self, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:

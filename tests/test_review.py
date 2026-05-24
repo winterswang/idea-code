@@ -45,6 +45,20 @@ class TestParseReviewOutput:
         assert result.reviewer == ""
         assert result.total_score == 0
 
+    def test_parse_null_suggestions(self):
+        """LLM 输出 'suggestions': null 不 crash"""
+        text = '{"reviewer": "技术视角", "total_score": 95, "passed": true, "dimensions": [], "blocking_issues": null, "suggestions": null, "feedback_for_builder": ""}'
+        result = parse_review_output(text)
+        assert result.blocking_issues == []
+        assert result.suggestions == []
+
+    def test_parse_null_dimensions(self):
+        """LLM 输出 'dimensions': null 不 crash"""
+        text = '{"reviewer": "产品视角", "total_score": 80, "passed": false, "dimensions": null, "blocking_issues": ["缺失场景"], "suggestions": [], "feedback_for_builder": ""}'
+        result = parse_review_output(text)
+        assert result.dimensions == []
+        assert len(result.blocking_issues) == 1
+
 
 class TestConvergeCheck:
     def test_both_pass(self):

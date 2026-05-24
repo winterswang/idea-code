@@ -107,9 +107,10 @@ def parse_review_output(text: str, expected_dimensions: list[str] | None = None)
     result.reviewer = raw.get("reviewer", "")
     result.total_score = int(raw.get("total_score", 0))
     result.passed = bool(raw.get("passed", False))
-    result.dimensions = raw.get("dimensions", [])
-    result.blocking_issues = raw.get("blocking_issues", [])
-    result.suggestions = raw.get("suggestions", [])
+    # or [] 兜底: LLM 可能输出 "dimensions": null, 导致 get(..., []) 返回 None
+    result.dimensions = raw.get("dimensions") or []
+    result.blocking_issues = raw.get("blocking_issues") or []
+    result.suggestions = raw.get("suggestions") or []
     result.feedback_for_builder = raw.get("feedback_for_builder", "")
 
     # 校验维度名

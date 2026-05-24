@@ -45,7 +45,12 @@ def agent_loop(
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason != "tool_use":
-            return {"calls": calls, "tokens_in": tokens_in, "tokens_out": tokens_out}
+            return {
+                "calls": calls,
+                "tokens_in": tokens_in,
+                "tokens_out": tokens_out,
+                "stop_reason": response.stop_reason,
+            }
 
         results = []
         for block in response.content:

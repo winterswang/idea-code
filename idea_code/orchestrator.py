@@ -34,7 +34,7 @@ from .review import (
     ReviewResult,
     compact_review_history,
 )
-from .state import save_state, save_review_record
+from .state import save_state, save_review_record, load_state
 from .logger import RunLogger
 from .tracer import ExecutionTracer
 from .utils import slugify
@@ -212,7 +212,7 @@ def run(
         api_key=os.environ["IDEA_API_KEY"],
         model=os.environ.get("IDEA_MODEL", "claude-sonnet-4-6"),
         base_url=os.environ.get("IDEA_BASE_URL"),
-        max_tokens=int(os.environ.get("IDEA_MAX_TOKENS", "8000")),
+        max_tokens=int(os.environ.get("IDEA_MAX_TOKENS", "16000")),
     )
     rev_a_ctx = create_context(
         api_key=os.environ["REV_A_API_KEY"],
@@ -238,7 +238,15 @@ def run(
     if VERBOSE_LOG:
         print(f"📊 详细日志: {tracer.path}")
 
-    feedback = "没有反馈信息，请按照相关要求设计需求文档"
+    # resume 时从 state 恢复上一轮 feedback（向后兼容旧 state 无 feedback 字段）
+    if resume_round > 1:
+        prev_state = load_state(slug)
+        feedback = prev_state.get("feedback", "") if prev_state else ""
+    else:
+        feedback = ""
+
+    if not feedback:
+        feedback = "没有反馈信息，请按照相关要求设计需求文档"
     scores_history = []
     consecutive_reviewer_failures = 0
     rev_a_dead = False
@@ -298,7 +306,8 @@ def run(
             traceback.print_exc()
             save_state(slug=slug, seed=seed, package_id=pkg.id,
                        round_num=round_num,
-                       scores=scores_history, max_rounds=max_rounds)
+                       scores=scores_history, max_rounds=max_rounds,
+                       feedback=feedback)
             logger.save()
             tracer.close()
             return False
@@ -419,7 +428,8 @@ def run(
         tracer.step("state_save", round_num=round_num)
         save_state(slug=slug, seed=seed, package_id=pkg.id,
                    round_num=round_num,
-                   scores=scores_history, max_rounds=max_rounds)
+                   scores=scores_history, max_rounds=max_rounds,
+                   feedback=feedback)
 
         # ── Reviewer 健康检查 ───────────────────────────
         health_warnings = _reviewer_health_check(result_a, result_b)
@@ -631,7 +641,8 @@ def run(
     logger.save()
     save_state(slug=slug, seed=seed, package_id=pkg.id,
                round_num=max_rounds,
-               scores=scores_history, max_rounds=max_rounds)
+               scores=scores_history, max_rounds=max_rounds,
+               feedback=feedback)
 
     print(f"\n📂 输出文件: {output_file}")
     print(f"📊 评审记录: {project_dir / 'reviews'}/")

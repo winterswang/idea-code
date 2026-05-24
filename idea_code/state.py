@@ -18,6 +18,7 @@ def save_state(
     round_num: int,
     scores: list[dict] | None = None,
     max_rounds: int | None = None,
+    feedback: str = "",
 ) -> Path:
     """Save session state (lightweight)."""
     project_dir = Path(PROJECTS_DIR) / slug
@@ -27,11 +28,12 @@ def save_state(
         "project": slug,
         "seed": seed,
         "prompt_package": package_id,
-        "version": 1,
+        "version": 2,
         "round": round_num,
         "max_rounds": max_rounds,
         "updated_at": time.time(),
         "scores": scores or [],
+        "feedback": feedback,
     }
 
     state_path = project_dir / "state.json"
