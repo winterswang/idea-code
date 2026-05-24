@@ -85,7 +85,14 @@ def main():
 
         print(f"\n🔄 恢复项目: {state['project']}")
         print(f"📝 Prompt 包: {state['prompt_package']}")
-        print(f"📊 已完成 {state['round']} 轮，从第 {resume_round} 轮继续\n")
+        # 显示上一轮评分
+        scores = state.get("scores", [])
+        if scores:
+            last = scores[-1]
+            sa = last.get("reviewer_a_score", "N/A")
+            sb = last.get("reviewer_b_score", "N/A")
+            print(f"📊 上一轮评分: A={sa}/100, B={sb}/100")
+        print(f"📊 从第 {resume_round}/{max_rounds} 轮继续\n")
 
         success = run(
             seed=state["seed"],
