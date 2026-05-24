@@ -2,8 +2,8 @@
 
 > 多 Agent 文档生成与代码审查工具 — Builder + 双 Reviewer 迭代闭环
 
-<!-- @@LAST_ANALYZED: acb36d201ec5a060c9553a9c423ce5a43b15c92e @@-->
-<!-- 最后更新: 2026-05-25 01:10 -->
+<!-- @@LAST_ANALYZED: 6081d40 @@-->
+<!-- 最后更新: 2026-05-25 02:00 — Code Review 后更新 -->
 
 ---
 
@@ -25,20 +25,20 @@
 
 | 模块 | 文件 | 职责 | 行数 |
 |------|------|------|------|
-| 编排器 | `orchestrator.py` | v1 流程编排：Builder + 双 Reviewer 迭代闭环 | 644 |
-| 评分系统 | `review.py` | JSON 解析、收敛判定、反馈合并、阻塞分类、历史压缩 | 413 |
+| 编排器 | `orchestrator.py` | v1 流程编排：Builder + 双 Reviewer 迭代闭环 | 664 |
+| 评分系统 | `review.py` | JSON 解析、收敛判定、反馈合并、阻塞分类、历史压缩 | 414 |
 | 执行追踪 | `tracer.py` | 结构化 JSONL + 人类可读执行报告 | 279 |
-| 上下文压缩 | `compact.py` | 三层管道：micro → auto → (预留 manual) | 75+ |
+| 上下文压缩 | `compact.py` | 三层管道：micro → auto → (预留 manual) | 91 |
 | 工具集 | `tools.py` | bash / read / write / edit / web_search | 292 |
-| 子 Agent | `subagent.py` | 独立 context 执行，返回文本 + token 用量 | ~30 |
-| Agent 循环 | `loop.py` | LLM 调用 → 工具执行 → 结果返回 | ~60 |
+| 子 Agent | `subagent.py` | 独立 context + ThinkingBlock 检测 + max_tokens 自适应重试 | 67 |
+| Agent 循环 | `loop.py` | LLM 调用 → 工具执行 → stop_reason 透传 | 60 |
 | Prompt 管理器 | `prompts/manager.py` | 目录扫描 + 动态注册 PackageConfig | 218 |
-| AgentContext | `context.py` | 封装 Anthropic client + model + max_tokens | ~30 |
-| 配置 | `config.py` | 环境变量、常量；不含 ProviderConfig | ~30 |
-| 状态持久化 | `state.py` | state.json + reviews/ 每轮 JSON | ~60 |
-| 运行日志 | `logger.py` | RunLogger 结构化日志 | ~80 |
-| CLI 入口 | `main.py` | Argparse CLI：运行/恢复/列表 | ~100 |
-| 工具函数 | `utils.py` | slugify 等 | ~15 |
+| AgentContext | `context.py` | 封装 Anthropic client + model + max_tokens | 27 |
+| 配置 | `config.py` | 环境变量、常量；不含 ProviderConfig | 20 |
+| 状态持久化 | `state.py` | state.json (version 2) + reviews/ 每轮 JSON | 68 |
+| 运行日志 | `logger.py` | RunLogger 结构化日志 | 60 |
+| CLI 入口 | `main.py` | Argparse CLI：运行/恢复/列表 | 135 |
+| 工具函数 | `utils.py` | slugify 等 | 15 |
 
 ### 测试覆盖
 
@@ -149,6 +149,34 @@ orchestrator.run()
 - 自动文档映射约定
 - **文件**: `CONVENTIONS.md`
 
+### F-014: Builder 独立 max_tokens 配置 (v0.4.3)
+- IDEA_BUILDER_MAX_TOKENS > IDEA_MAX_TOKENS > 32000 三级优先级
+- Reviewer 保持独立角色配置，不受 Builder 窗口影响
+- **文件**: `orchestrator.py`
+
+### F-015: Builder Round 1 SOP 对齐 (v0.4.3)
+- Round 1 从「直接生成」重构为 规划→生成→自检 三阶段
+- dev-doc + research 双包同步对齐
+- 自检包括: 7 章完整性、章节间矛盾检测、种子意图覆盖
+- **文件**: `prompts/*/builder.md`, `prompts/*/builder-context.md`
+
+### F-016: Resume 评分确认 (v0.4.3)
+- --resume 时显示上一轮具体评分 (A=xx/100, B=xx/100)
+- 用户可确认恢复的是哪个运行状态
+- **文件**: `main.py`
+
+### F-017: stderr 诊断输出 (v0.4.3)
+- Builder/Reviewer A/B 的 except 块全部输出到 stderr (file=sys.stderr)
+- 附带 scores_history 辅助上下文定位
+- 避免 tee stdout 时丢失异常信息
+- **文件**: `orchestrator.py`
+
+### F-018: ThinkingBlock 检测 + max_tokens 自适应重试 (v0.4.3)
+- subagent.py 检测 DeepSeek/其他模型的 ThinkingBlock-only 响应
+- 自动以 2x max_tokens 重试（上限 2 次深度）
+- agent_loop 透传 stop_reason 供调用方判断
+- **文件**: `subagent.py`, `loop.py`
+
 ---
 
 ## 🐛 Bug 跟踪
@@ -208,6 +236,30 @@ orchestrator.run()
 - **根因**: 误操作
 - **修复**: 后续提交立即恢复 (`fix: 恢复误删的文档文件`)
 - **影响**: 无，已及时恢复
+
+### B-011: consecutive_reviewer_failures 死代码 (v0.4.3)
+- **症状**: orchestrator.py:257 声明后从未使用
+- **根因**: 变量声明后被 reviewer 逐 Reviewer 检测逻辑取代
+- **修复**: 移除死代码
+- **关联**: `orchestrator.py` 第 257 行
+
+### B-012: Reviewer except 块缺少 traceback.print_exc() (v0.4.3)
+- **症状**: Builder except 有 print_exc，Reviewer A/B 没有
+- **根因**: 不一致的异常处理
+- **修复**: 统一所有 except 块输出方式
+- **关联**: `orchestrator.py` 第 364/401 行
+
+### B-013: per_dim_fail 使用 dir() 检查变量 (v0.4.3)
+- **症状**: orchestrator.py:557 用 `'fail_a' in dir()` 检查变量存在性
+- **根因**: fail_a/fail_b 在条件块内声明，未显式初始化为 None
+- **修复**: 在条件块外预初始化为空列表
+- **关联**: `orchestrator.py` per_dim_fail 检测逻辑
+
+### B-014: 测试覆盖缺口 — loop.py / subagent.py / orchestrator.py (v0.4.3)
+- **症状**: 三个核心模块无直接单元测试
+- **根因**: 开发节奏优先修复 Bug 和 SOP 对齐
+- **修复**: 待补充 mock-based 测试
+- **关联**: `loop.py`, `subagent.py`, `orchestrator.py`
 
 ---
 
@@ -293,6 +345,14 @@ orchestrator.run()
 - **影响**: 非阻断，仅建议；提升收敛率
 - **状态**: 已落地
 
+### ADR-011: Builder 独立 max_tokens 配置化
+- **日期**: 2026-05-25 (v0.4.3)
+- **背景**: Builder 产文档需大量 token（26KB ≈ 40000 tokens），Reviewer 只需 JSON（<500 tokens），共用默认值不合理
+- **决策**: 新增 IDEA_BUILDER_MAX_TOKENS，三级优先级: IDEA_BUILDER_MAX_TOKENS > IDEA_MAX_TOKENS > 32000
+- **替代方案**: 统一 max_tokens 16000（Builder 仍不够）、每次重试翻倍（浪费 API 调用）
+- **影响**: 用户明确控制 Builder 窗口；向后兼容（未设置时走共享值）
+- **状态**: 已落地
+
 ---
 
 ## 🔧 技术债务
@@ -301,8 +361,12 @@ orchestrator.run()
 |----|------|--------|------|
 | TD-001 | auto_compact LLM 调用失败时静默回退但丢失上下文 | 低 | 待处理 |
 | TD-002 | `_render_round` TUI 输出对非常规 phase 名称缺少处理 | 低 | 待处理 |
-| TD-003 | `per_dim_fail` 在 orchestrator.py 中变量作用域问题 (`fail_a` 使用 `dir()` 检查) | 低 | ⚠️ 待确认 |
-| TD-004 | `converge_check()` 函数在 `review.py` 中定义但在 `orchestrator.py` 中有内联实现 | 低 | 待统一 |
+| TD-003 | `per_dim_fail` 变量作用域问题 (已记录为 B-013) | 低 | ✅ 已记录 |
+| TD-004 | `converge_check()` 在 review.py 定义但 orchestrator.py 有内联逻辑 | 低 | 待统一 |
+| TD-005 | Reviewer A/B 串行化 — 可并行（独立 context），~30% 提速 | 中 | 待实现 |
+| TD-006 | `_build_review_history` 每轮重新 LLM 压缩历史 — 无缓存 | 低 | 待优化 |
+| TD-007 | `compact.py` `micro_compact` 原地修改 messages — 隐式副作用 | 低 | 待重构 |
+| TD-008 | LLM 写的文件无路径白名单 — 可覆盖源码 (工具集安全) | 中 | 待加固 |
 
 ---
 
@@ -360,17 +424,16 @@ orchestrator.run()
 
 | 指标 | 值 |
 |------|-----|
-| 当前版本 | v0.4.2 |
+| 当前版本 | v0.4.3 |
 | 代码模块 | 14 个源文件 (idea_code/) |
-| 测试文件 | 8 个 (单元 + 集成 + E2E) |
+| 测试文件 | 8 个 (单元 + 集成 + E2E) — 62 用例 |
 | 内置 Prompt 包 | 2 个 (requirements-dev-doc, requirements-research) |
-| 核心模型 | Builder: MiniMax-M2.7, Reviewer: DeepSeek V4 Pro × 2 |
-| 活跃 Feature | 13 个 (F-001 ~ F-013) |
-| 已修复 Bug | 10 个 (B-001 ~ B-010) |
-| 待修复 Bug | 0 |
-| ADR 记录 | 10 个 |
-| 技术债务 | 4 项 (TD-001 ~ TD-004) |
-| 最新提交 | `acb36d2` (Builder+Reviewer SOP 对齐 + stderr 诊断) |
+| 核心模型 | 可配置 (Anthropic / MiniMax / DeepSeek / GLM / Kimi) |
+| 活跃 Feature | 18 个 (F-001 ~ F-018) |
+| 已修复 Bug | 11 个 (B-001 ~ B-010 ✅, B-011 ~ B-014 待修) |
+| ADR 记录 | 11 个 (ADR-001 ~ ADR-011) |
+| 技术债务 | 8 项 (TD-001 ~ TD-008) |
+| 最新提交 | `6081d40` (Resume 评分确认 + Builder 独立 max_tokens) |
 | Git 钩子 | ✅ post-commit 已安装 |
-| 已关闭 Issue | 2 个 (#1 Bug + #2 Enhancement) |
-| 架构一致性 | ✅ 代码与 DOC 一致 (2026-05-25 验证) |
+| 已关闭 Issue | 4 个 (#1 #2 #4 已关闭, #4 via PR #5) |
+| Code Review 评分 | 7.4/10 (架构 8/代码质量 7/错误处理 7.5/安全 7.5/测试 7/性能 7/文档 8) |
