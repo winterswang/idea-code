@@ -2,8 +2,8 @@
 
 > 多 Agent 文档生成与代码审查工具 — Builder + 双 Reviewer 迭代闭环
 
-<!-- @@LAST_ANALYZED: 1fa7e249c0db8f3f2088f5cf508192599f7d7b66 @@-->
-<!-- 最后更新: 2026-05-24 01:07 -->
+<!-- @@LAST_ANALYZED: acb36d201ec5a060c9553a9c423ce5a43b15c92e @@-->
+<!-- 最后更新: 2026-05-25 01:10 -->
 
 ---
 
@@ -309,10 +309,13 @@ orchestrator.run()
 ## 🔄 版本记录
 
 ### v0.4.3 (当前) — 2026-05-25
-- **🐛 P0 修复: LLM 输出 null 导致进程崩溃 (#1)**: `raw.get("suggestions", [])` 在 JSON 值为 `null` 时返回 `None` → `len(None)` 崩溃。修复: `or []` 兜底 (review.py)
-- **🐛 P0 修复: --resume 忽略前轮反馈 (#1)**: `feedback` 未持久化到 `state.json`，resume 时 Builder 得到"没有反馈信息"。修复: 新增 `feedback` 字段到 state.json (state.py, orchestrator.py)
-- **🔧 P1 修复: DeepSeek thinking 吃掉全部 max_tokens 预算 (#1)**: 默认 Builder max_tokens 8000→16000；subagent.py 检测 ThinkingBlock-only 响应后自动以 2 倍 max_tokens 重试（最多 2 次）；agent_loop 透传 `stop_reason` 供调用方判断
+- **🐛 P0 修复: LLM 输出 null 导致进程崩溃 (#1)**: `raw.get("suggestions", [])` 在 JSON 值为 `null` 时返回 `None` → `len(None)` TypeError 崩溃。修复: `or []` 兜底 (review.py)
+- **🐛 P0 修复: --resume 忽略前轮反馈 (#1)**: `feedback` 未持久化到 `state.json`，resume 时 Builder 得到"没有反馈信息"。修复: state.json version 1→2, 新增 `feedback` 字段 (state.py, orchestrator.py)
+- **🔧 P1 修复: DeepSeek thinking 吃掉全部 max_tokens 预算 (#1)**: Builder 默认 max_tokens 8000→16000；subagent.py 检测 ThinkingBlock-only 响应后自动以 2x 重试；agent_loop 透传 `stop_reason`
+- **🔧 Builder+Reviewer SOP 对齐 (#2)**: Round 1 从「直接生成」重构为 规划→生成→自检 三阶段 (dev-doc + research 双包)；Reviewer feedback_for_builder 强制以意图理解开头
+- **🔧 stderr 诊断输出 (#2)**: Builder/Reviewer A/B 的 except 块全部 `print(..., file=sys.stderr)`，附带 scores_history，避免 `tee stdout` 时丢失
 - **🧪 测试新增**: null JSON 字段反序列化测试 (test_review.py) + feedback 持久化测试 (test_state.py)
+- **✅ Issue 闭环**: #1 (null崩溃/resume反馈/max_tokens) + #2 (SOP对齐/诊断输出) 均已修复并关闭
 
 ### v0.4.2 — 2026-05-24
 - **tracer+compact 单元测试完成**: 16/16 全量测试覆盖
@@ -367,6 +370,7 @@ orchestrator.run()
 | 待修复 Bug | 0 |
 | ADR 记录 | 10 个 |
 | 技术债务 | 4 项 (TD-001 ~ TD-004) |
-| 最新提交 | `1fa7e24` (README重写 + 版本号修复 + dev依赖) |
-| Git 钩子 | ✅ post-commit 已安装 (首次 commit 后自动更新日志) |
-| 架构一致性 | ✅ 代码与 DOC 一致 (2026-05-24 验证) |
+| 最新提交 | `acb36d2` (Builder+Reviewer SOP 对齐 + stderr 诊断) |
+| Git 钩子 | ✅ post-commit 已安装 |
+| 已关闭 Issue | 2 个 (#1 Bug + #2 Enhancement) |
+| 架构一致性 | ✅ 代码与 DOC 一致 (2026-05-25 验证) |
