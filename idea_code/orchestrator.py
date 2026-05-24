@@ -13,6 +13,7 @@
 
 import json
 import os
+import sys
 import time as _time
 import traceback
 from pathlib import Path
@@ -302,7 +303,8 @@ def run(
                 latency_ms=latency_ms, status="error", error=str(e),
             )
             tracer.step("builder_error", round_num=round_num, error=str(e))
-            print(f"  ❌ Builder 异常: {e}")
+            print(f"  ❌ Round {round_num} Builder 异常: {e}", file=sys.stderr)
+            print(f"     scores: {scores_history}", file=sys.stderr)
             traceback.print_exc()
             save_state(slug=slug, seed=seed, package_id=pkg.id,
                        round_num=round_num,
@@ -361,7 +363,8 @@ def run(
                     tokens_in=0, tokens_out=0, calls=0,
                     latency_ms=latency_ms, status="error", error=str(e),
                 )
-                print(f"  ⚠️  Reviewer A 异常: {e}，跳过该 Reviewer")
+                print(f"  ❌ Round {round_num} Reviewer A 异常: {e}，跳过该 Reviewer", file=sys.stderr)
+                traceback.print_exc()
                 result_a = ReviewResult(total_score=0, error=str(e))
 
         # ── Reviewer B ───────────────────────────────────
@@ -398,7 +401,8 @@ def run(
                     tokens_in=0, tokens_out=0, calls=0,
                     latency_ms=latency_ms, status="error", error=str(e),
                 )
-                print(f"  ⚠️  Reviewer B 异常: {e}，跳过该 Reviewer")
+                print(f"  ❌ Round {round_num} Reviewer B 异常: {e}，跳过该 Reviewer", file=sys.stderr)
+                traceback.print_exc()
                 result_b = ReviewResult(total_score=0, error=str(e))
 
         # ── 保存评审记录 ─────────────────────────────────
