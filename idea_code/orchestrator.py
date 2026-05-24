@@ -209,11 +209,16 @@ def run(
 
     # 创建 3 个 AgentContext
     tracer.step("context_init")
+    # Builder 独立 max_tokens: IDEA_BUILDER_MAX_TOKENS > IDEA_MAX_TOKENS > 32000
+    builder_max_tokens = int(
+        os.environ.get("IDEA_BUILDER_MAX_TOKENS")
+        or os.environ.get("IDEA_MAX_TOKENS", "32000")
+    )
     builder_ctx = create_context(
         api_key=os.environ["IDEA_API_KEY"],
         model=os.environ.get("IDEA_MODEL", "claude-sonnet-4-6"),
         base_url=os.environ.get("IDEA_BASE_URL"),
-        max_tokens=int(os.environ.get("IDEA_MAX_TOKENS", "16000")),
+        max_tokens=builder_max_tokens,
     )
     rev_a_ctx = create_context(
         api_key=os.environ["REV_A_API_KEY"],
