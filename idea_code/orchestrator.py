@@ -72,9 +72,9 @@ def _build_review_history(project_dir: Path, round_num: int, ctx) -> str:
 
     # 增量压缩：历史摘要 + 最新一轮
     if prev_summary:
-        combined = f"## 历史评审摘要\n{prev_summary}\n\n## 第 {round_num - 1} 轮评审\n{_json.dumps(latest_record, indent=2, ensure_ascii=False)}"
+        combined = f"## 历史评审摘要\n{prev_summary}\n\n## 第 {round_num - 1} 轮评审\n{json.dumps(latest_record, indent=2, ensure_ascii=False)}"
     else:
-        combined = _json.dumps([latest_record], indent=2, ensure_ascii=False)
+        combined = json.dumps([latest_record], indent=2, ensure_ascii=False)
 
     summary = compact_review_history(combined, ctx)
     if summary:
