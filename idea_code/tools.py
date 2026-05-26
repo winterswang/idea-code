@@ -4,7 +4,17 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from .config import WORKDIR
+from .config import WORKDIR, ALLOWED_WRITE_BASES
+
+
+def _check_write_allowed(fp: Path) -> None:
+    """验证写入路径在允许的目录下。"""
+    allowed = [Path(base).resolve() for base in ALLOWED_WRITE_BASES]
+    resolved = fp.resolve()
+    if not any(str(resolved).startswith(str(base)) for base in allowed):
+        raise ValueError(
+            f"写入路径被拒绝: {fp} — 仅允许 projects/ 和 .transcripts/ 目录"
+        )
 
 
 def safe_path(path: str) -> Path:
@@ -65,6 +75,7 @@ def run_read(path: str, limit: int | None = None) -> str:
 def run_write(path: str, content: str) -> str:
     try:
         fp = safe_path(path)
+        _check_write_allowed(fp)
         fp.parent.mkdir(parents=True, exist_ok=True)
         fp.write_text(content, encoding="utf-8")
         return f"已写入 {len(content)} 字节到 {path}"
@@ -75,6 +86,7 @@ def run_write(path: str, content: str) -> str:
 def run_edit(path: str, old_text: str, new_text: str) -> str:
     try:
         fp = safe_path(path)
+        _check_write_allowed(fp)
         content = fp.read_text(encoding="utf-8")
         if old_text not in content:
             return f"Error: 在 {path} 中未找到要替换的文本"

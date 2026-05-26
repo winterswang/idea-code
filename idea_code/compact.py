@@ -73,7 +73,10 @@ def micro_compact(messages: list) -> None:
 
 
 def auto_compact(messages: list, client, model: str) -> list:
-    """保存完整 transcript 到磁盘，LLM 总结后替换 messages。"""
+    """保存完整 transcript 到磁盘，LLM 总结后替换 messages。
+
+    如果 LLM 摘要失败或太短（<20 字），保留原始 messages 避免丢失上下文。
+    """
     TRANSCRIPT_DIR.mkdir(exist_ok=True)
     transcript_path = TRANSCRIPT_DIR / f"transcript_{int(time.time())}.jsonl"
     with open(transcript_path, "w", encoding="utf-8") as f:
@@ -81,25 +84,33 @@ def auto_compact(messages: list, client, model: str) -> list:
             f.write(_redact_sensitive(json.dumps(msg, default=str)) + "\n")
 
     conversation_text = json.dumps(messages, default=str)[-80000:]
-    response = client.messages.create(
-        model=model,
-        messages=[{
-            "role": "user",
-            "content": (
-                "请总结以下对话，保留以下关键信息：\n"
-                "1) 已完成的工作\n"
-                "2) 当前状态\n"
-                "3) 已做出的关键决策\n"
-                "请简洁但保留关键细节。\n\n" + conversation_text
-            ),
-        }],
-        max_tokens=2000,
-    )
 
-    summary = next(
-        (block.text for block in response.content if hasattr(block, "text")),
-        "无法生成摘要。",
-    )
+    try:
+        response = client.messages.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "请总结以下对话，保留以下关键信息：\n"
+                    "1) 已完成的工作\n"
+                    "2) 当前状态\n"
+                    "3) 已做出的关键决策\n"
+                    "请简洁但保留关键细节。\n\n" + conversation_text
+                ),
+            }],
+            max_tokens=2000,
+        )
+
+        summary = next(
+            (block.text for block in response.content if hasattr(block, "text")),
+            "",
+        )
+    except Exception:
+        summary = ""
+
+    # 摘要质量不足 → 保留原始 messages（回退到未压缩状态）
+    if not summary or len(summary) < 20:
+        return messages
 
     return [{
         "role": "user",

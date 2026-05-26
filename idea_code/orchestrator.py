@@ -11,6 +11,7 @@
   3. 保存 state.json + 评审记录
 """
 
+import concurrent.futures
 import json
 import os
 import sys
@@ -24,7 +25,6 @@ from .prompts.manager import PackageConfig
 from .subagent import run_subagent
 from .review import (
     parse_review_output,
-    converge_check,
     extract_dimension_score,
     check_per_dimension_threshold,
     INTENT_DIM_NAME,
@@ -42,23 +42,46 @@ from .utils import slugify
 
 
 def _build_review_history(project_dir: Path, round_num: int, ctx) -> str:
-    """从 reviews/ 目录读取前 round_num-1 轮记录并 LLM 压缩。"""
+    """从 reviews/ 目录读取前 round_num-1 轮记录并 LLM 压缩。
+
+    缓存策略：压缩结果保存到 reviews/round-{N:02d}-summary.txt，
+    后续轮次只增量压缩最新轮次，避免 O(n) 重复 LLM 调用。
+    """
     if round_num <= 1:
         return ""
     reviews_dir = project_dir / "reviews"
     if not reviews_dir.exists():
         return ""
-    records = []
-    for i in range(1, round_num):
-        record_path = reviews_dir / f"round-{i:02d}.json"
-        if record_path.exists():
-            try:
-                records.append(json.loads(record_path.read_text(encoding="utf-8")))
-            except Exception:
-                pass
-    if not records:
-        return ""
-    return compact_review_history(records, ctx)
+
+    # 已有缓存的摘要 → 只压缩最新一轮增量
+    prev_summary_path = reviews_dir / f"round-{round_num - 1:02d}-summary.txt"
+    if prev_summary_path.exists():
+        prev_summary = prev_summary_path.read_text(encoding="utf-8").strip()
+    else:
+        prev_summary = ""
+
+    # 读取最新一轮的评审记录
+    latest_record_path = reviews_dir / f"round-{round_num - 1:02d}.json"
+    if not latest_record_path.exists():
+        return prev_summary or ""
+
+    try:
+        latest_record = json.loads(latest_record_path.read_text(encoding="utf-8"))
+    except Exception:
+        return prev_summary or ""
+
+    # 增量压缩：历史摘要 + 最新一轮
+    if prev_summary:
+        combined = f"## 历史评审摘要\n{prev_summary}\n\n## 第 {round_num - 1} 轮评审\n{_json.dumps(latest_record, indent=2, ensure_ascii=False)}"
+    else:
+        combined = _json.dumps([latest_record], indent=2, ensure_ascii=False)
+
+    summary = compact_review_history(combined, ctx)
+    if summary:
+        (reviews_dir / f"round-{round_num - 1:02d}-summary.txt").write_text(
+            summary, encoding="utf-8"
+        )
+    return summary or prev_summary or ""
 
 
 def _format_scoring_table(scoring: list, philosophy: str = "") -> str:
@@ -333,81 +356,77 @@ def run(
         doc_content = output_file.read_text(encoding="utf-8")
         tracer.step("doc_loaded", round_num=round_num, doc_chars=len(doc_content))
 
-        # ── Reviewer A ───────────────────────────────────
-        result_a = ReviewResult(total_score=0)
-        tokens_a = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
-        if pkg.reviewer_a:
-            tracer.step("review_a_start", round_num=round_num)
-            print("  🔍 Reviewer A 评审中...")
+        # ── Reviewer A/B 并行 ────────────────────────────
+        def _run_reviewer_safe(
+            which: str, ctx: AgentContext
+        ) -> tuple[ReviewResult, dict]:
             t0 = _time.time()
             try:
-                result_a, tokens_a = _run_reviewer(doc_content, seed, pkg, "a", rev_a_ctx, round_num, max_rounds, tracer=tracer)
-                latency_ms = int((_time.time() - t0) * 1000)
-                tracer.api_call(
-                    agent="reviewer_a", model=rev_a_ctx.model, round_num=round_num,
-                    tokens_in=tokens_a.get("tokens_in", 0),
-                    tokens_out=tokens_a.get("tokens_out", 0),
-                    calls=tokens_a.get("calls", 0),
-                    latency_ms=latency_ms, status="ok",
+                r, tok = _run_reviewer(
+                    doc_content, seed, pkg, which, ctx, round_num, max_rounds, tracer=tracer
                 )
-                intent_a = extract_dimension_score(result_a.dimensions, INTENT_DIM_NAME)
-                dims_a = _format_dimensions_summary(result_a.dimensions)
-                tracer.review(
-                    reviewer="a", name=result_a.reviewer, round_num=round_num,
-                    total_score=result_a.total_score, intent=intent_a, dimensions=dims_a,
-                )
-                intent_str = f" 意图{intent_a}/{INTENT_MAX_SCORE}" if intent_a is not None else ""
-                print(f"     {result_a.reviewer}: {result_a.total_score}/100 "
-                      f"({'✅' if result_a.total_score >= 95 else '❌'}){intent_str}")
-                print(f"     ↳ {dims_a}")
+                return r, tok
             except Exception as e:
-                latency_ms = int((_time.time() - t0) * 1000)
-                tracer.api_call(
-                    agent="reviewer_a", model=rev_a_ctx.model, round_num=round_num,
-                    tokens_in=0, tokens_out=0, calls=0,
-                    latency_ms=latency_ms, status="error", error=str(e),
-                )
-                print(f"  ❌ Round {round_num} Reviewer A 异常: {e}，跳过该 Reviewer", file=sys.stderr)
-                traceback.print_exc()
-                result_a = ReviewResult(total_score=0, error=str(e))
+                return ReviewResult(total_score=0, error=str(e)), {
+                    "calls": 0, "tokens_in": 0, "tokens_out": 0,
+                }
 
-        # ── Reviewer B ───────────────────────────────────
+        result_a = ReviewResult(total_score=0)
         result_b = ReviewResult(total_score=0)
-        tokens_b = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
+        tokens_a: dict = {}
+        tokens_b: dict = {}
+        rev_tasks = {}
+        if pkg.reviewer_a:
+            rev_tasks["a"] = (rev_a_ctx,)
         if pkg.reviewer_b:
-            tracer.step("review_b_start", round_num=round_num)
-            print("  🔍 Reviewer B 评审中...")
-            t0 = _time.time()
-            try:
-                result_b, tokens_b = _run_reviewer(doc_content, seed, pkg, "b", rev_b_ctx, round_num, max_rounds, tracer=tracer)
-                latency_ms = int((_time.time() - t0) * 1000)
-                tracer.api_call(
-                    agent="reviewer_b", model=rev_b_ctx.model, round_num=round_num,
-                    tokens_in=tokens_b.get("tokens_in", 0),
-                    tokens_out=tokens_b.get("tokens_out", 0),
-                    calls=tokens_b.get("calls", 0),
-                    latency_ms=latency_ms, status="ok",
-                )
-                intent_b = extract_dimension_score(result_b.dimensions, INTENT_DIM_NAME)
-                dims_b = _format_dimensions_summary(result_b.dimensions)
-                tracer.review(
-                    reviewer="b", name=result_b.reviewer, round_num=round_num,
-                    total_score=result_b.total_score, intent=intent_b, dimensions=dims_b,
-                )
-                intent_str = f" 意图{intent_b}/{INTENT_MAX_SCORE}" if intent_b is not None else ""
-                print(f"     {result_b.reviewer}: {result_b.total_score}/100 "
-                      f"({'✅' if result_b.total_score >= 95 else '❌'}){intent_str}")
-                print(f"     ↳ {dims_b}")
-            except Exception as e:
-                latency_ms = int((_time.time() - t0) * 1000)
-                tracer.api_call(
-                    agent="reviewer_b", model=rev_b_ctx.model, round_num=round_num,
-                    tokens_in=0, tokens_out=0, calls=0,
-                    latency_ms=latency_ms, status="error", error=str(e),
-                )
-                print(f"  ❌ Round {round_num} Reviewer B 异常: {e}，跳过该 Reviewer", file=sys.stderr)
-                traceback.print_exc()
-                result_b = ReviewResult(total_score=0, error=str(e))
+            rev_tasks["b"] = (rev_b_ctx,)
+
+        if rev_tasks:
+            print("  🔍 Reviewer A/B 评审中...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                futures = {
+                    which: pool.submit(_run_reviewer_safe, which, ctx)
+                    for which, (ctx,) in rev_tasks.items()
+                }
+                for which, fut in futures.items():
+                    try:
+                        r, tok = fut.result()
+                    except Exception as e:
+                        r = ReviewResult(total_score=0, error=str(e))
+                        tok = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
+                    if which == "a":
+                        result_a, tokens_a = r, tok
+                    else:
+                        result_b, tokens_b = r, tok
+
+        # ── Reviewer 结果汇报（主线程安全） ────────────────
+        for which, r in [("a", result_a), ("b", result_b)]:
+            loader = pkg.reviewer_a if which == "a" else pkg.reviewer_b
+            if not loader:
+                continue
+            ctx = rev_a_ctx if which == "a" else rev_b_ctx
+            tok = tokens_a if which == "a" else tokens_b
+            # tracer 记录
+            tracer.api_call(
+                agent=f"reviewer_{which}", model=ctx.model,
+                round_num=round_num,
+                tokens_in=tok.get("tokens_in", 0),
+                tokens_out=tok.get("tokens_out", 0),
+                calls=tok.get("calls", 0),
+                latency_ms=0,
+                status="ok" if not r.error else "error",
+                error=r.error if r.error else None,
+            )
+            intent = extract_dimension_score(r.dimensions, INTENT_DIM_NAME)
+            dims = _format_dimensions_summary(r.dimensions)
+            tracer.review(
+                reviewer=which, name=r.reviewer, round_num=round_num,
+                total_score=r.total_score, intent=intent, dimensions=dims,
+            )
+            intent_str = f" 意图{intent}/{INTENT_MAX_SCORE}" if intent is not None else ""
+            print(f"     {r.reviewer}: {r.total_score}/100 "
+                  f"({'✅' if r.total_score >= 95 else '❌'}){intent_str}")
+            print(f"     ↳ {dims}")
 
         # ── 保存评审记录 ─────────────────────────────────
         save_review_record(

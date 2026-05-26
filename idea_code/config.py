@@ -8,6 +8,9 @@ load_dotenv(override=True)
 WORKDIR = os.getcwd()
 MAX_ROUNDS = int(os.getenv("IDEA_MAX_ROUNDS", "10"))
 PROJECTS_DIR = os.path.join(WORKDIR, "projects")
+TRANSCRIPTS_DIR = os.path.join(WORKDIR, ".transcripts")
+# write_file / edit_file 仅允许写入这些目录下的路径
+ALLOWED_WRITE_BASES = [PROJECTS_DIR, TRANSCRIPTS_DIR]
 VERBOSE_LOG = os.getenv("IDEA_VERBOSE_LOG", "").strip() == "1"
 API_TIMEOUT_SECS = int(os.getenv("IDEA_API_TIMEOUT", "300"))
 REQUIRED_ENV_VARS = [
