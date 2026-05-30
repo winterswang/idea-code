@@ -1,0 +1,57 @@
+{
+  "reviewer": "执行视角",
+  "pass_threshold": 95,
+  "scoring_philosophy": "保守评分。从每个维度的满分开始审视：发现明确问题才扣分。95+ 仅授予 AI 工具可以无人工干预完成全部 MVP Task 的 Plan。最关键的是 Plan 中各 Task 之间的流畅衔接——Claude Code 完成 Task N 后不作任何人工澄清就能进行 Task N+1。对模棱两可的情况，宁可扣分也不要给分。",
+  "dimensions": [
+    {
+      "dimension": "AI 可执行性",
+      "max_score": 25,
+      "description": "Claude Code 拿到 Plan 后是否能直接开始执行第一 Task，无歧义",
+      "calibration": {
+        "excellent": "23-25：AI 逐 Task 执行时，每个 Task 都包含完整的文件路径、接口签名、验收标准——无需人工补充信息",
+        "adequate": "16-22：AI 可执行大部分 Task，但 1-2 个 Task 需要人工澄清问题后才能继续",
+        "poor": "0-15：多个 Task 缺乏关键信息（文件路径/接口定义/验收标准），AI 无法独立执行"
+      }
+    },
+    {
+      "dimension": "MVP 范围对齐",
+      "max_score": 20,
+      "description": "Plan 的优先级顺序是否与 requirements.md 的 P0/P1 一致",
+      "calibration": {
+        "excellent": "18-20：优先级与 requirements.md 完全一致，P0 功能全在早期 Task，P1 合理后置",
+        "adequate": "13-17：大体对齐，但 1-2 个 P0 功能的 Task 被排得不合理或遗漏",
+        "poor": "0-12：P0 功能被后置或遗漏，Plan 的优先级方向与需求文档不符"
+      }
+    },
+    {
+      "dimension": "任务粒度适中",
+      "max_score": 20,
+      "description": "每个 Task 是否是一次聚焦编码会话能完成的规模 (20-60 min)",
+      "calibration": {
+        "excellent": "18-20：所有 Task 都在 20-60 min 粒度，既不过大（需要多次会话）也不过小（碎片化）",
+        "adequate": "13-17：大部分 Task 粒度合理，但 1-2 个 Task 过大需进一步拆分",
+        "poor": "0-12：Task 粒度严重失衡——部分 Task 为 5min 碎片，部分需要 4h+"
+      }
+    },
+    {
+      "dimension": "并行可执行性",
+      "max_score": 15,
+      "description": "标注为并行的 Task 之间是否真的无共享状态、无隐式依赖",
+      "calibration": {
+        "excellent": "13-15：所有并行标注的 Task 完全独立，无共享文件/数据库/状态",
+        "adequate": "9-12：并行关系基本正确，但 1 对并行 Task 共享了文件（隐式冲突）",
+        "poor": "0-8：多个并行 Task 存在共享状态冲突，同时执行会导致代码合并冲突或数据损坏"
+      }
+    },
+    {
+      "dimension": "渐进可交付",
+      "max_score": 20,
+      "description": "在 Plan 任意中间节点中止时，是否已经交付了完整可用的功能子集",
+      "calibration": {
+        "excellent": "18-20：Plan 每 3-5 Task 就交付一个可独立运行的增量——可在任何节点中止",
+        "adequate": "13-17：有渐进交付设计，但部分阶段交付的子集不完整或不可运行",
+        "poor": "0-12：Plan 为瀑布式——所有 Task 完成后才能运行，中途中止无法交付任何东西"
+      }
+    }
+  ]
+}

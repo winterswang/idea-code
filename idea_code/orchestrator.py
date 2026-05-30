@@ -206,7 +206,18 @@ def run(
 
     Returns: 是否收敛成功
     """
-    slug = slugify(seed)
+    # input_type == "existing_file" 时, seed 为文件路径 → 读取为输入文档
+    if pkg.input_type == "existing_file":
+        input_path = Path(seed)
+        if input_path.exists():
+            seed = input_path.read_text(encoding="utf-8")
+        else:
+            print(f"错误: 输入文件不存在: {seed}")
+            return False
+        slug = input_path.parent.name or slugify(seed[:50])
+    else:
+        slug = slugify(seed)
+
     project_dir = Path(PROJECTS_DIR) / slug
     project_dir.mkdir(parents=True, exist_ok=True)
 

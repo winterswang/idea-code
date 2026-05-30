@@ -90,7 +90,7 @@ class TestPromptPackageIntegration:
     def test_list_packages_detail(self):
         registry = PromptRegistry("prompts")
         detail = registry.list_packages_detail()
-        assert len(detail) == 2
+        assert len(detail) >= 2  # 包数量随版本增长，至少 2 个
         assert detail[0]["reviewer_count"] == 2
 
 

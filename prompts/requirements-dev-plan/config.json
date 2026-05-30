@@ -1,0 +1,28 @@
+{
+  "label": "开发执行计划",
+  "description": "从需求文档生成结构化开发执行计划 — 适配 AI coding 工具 (Claude Code / Codex)",
+  "output_file": "execution_plan.md",
+  "reviewer_count": 2,
+  "input": {
+    "type": "existing_file",
+    "file": "requirements.md"
+  },
+  "builder": {
+    "role": "资深软件架构师",
+    "model": "IDEA",
+    "prompt_file": "builder.md",
+    "context_file": "builder-context.md"
+  },
+  "reviewer_a": {
+    "name": "技术视角",
+    "scoring_file": "scoring-a.json",
+    "prompt_file": "reviewer-a.md",
+    "context_file": "reviewer-a-context.md"
+  },
+  "reviewer_b": {
+    "name": "执行视角",
+    "scoring_file": "scoring-b.json",
+    "prompt_file": "reviewer-b.md",
+    "context_file": "reviewer-b-context.md"
+  }
+}
