@@ -1,0 +1,57 @@
+{
+  "reviewer": "技术视角",
+  "pass_threshold": 95,
+  "scoring_philosophy": "保守评分。从每个维度的满分开始审视：发现明确问题才扣分，未发现明确问题则保留满分。95+ 仅授予直接可被 AI coding 工具执行的 Plan——即 Claude Code 可以无歧义地按顺序执行每一 Task。对模棱两可的情况，宁可扣分也不要给分。",
+  "dimensions": [
+    {
+      "dimension": "依赖链完整性",
+      "max_score": 25,
+      "description": "Task 之间的依赖是否为完整 DAG，是否有缺失边、循环依赖",
+      "calibration": {
+        "excellent": "23-25：依赖链完整无缺，所有 Task 的输入输出都正确链接，无循环依赖",
+        "adequate": "16-22：依赖链基本正确，但存在 1-2 处缺少依赖声明或隐式依赖",
+        "poor": "0-15：依赖链存在明显断裂——Task 引用了未声明依赖的输出，或存在循环依赖"
+      }
+    },
+    {
+      "dimension": "接口契约清晰度",
+      "max_score": 25,
+      "description": "每个 Task 的上下游接口是否具体到方法签名、数据结构级别",
+      "calibration": {
+        "excellent": "23-25：所有 Task 的接口契约包含具体方法签名（参数+返回类型），上下游接口精确匹配",
+        "adequate": "16-22：大部分接口有具体签名，但 1-2 个 Task 缺少返回类型或数据格式定义",
+        "poor": "0-15：接口契约模糊——用自然语言描述而非方法签名，AI 工具需要猜测接口细节"
+      }
+    },
+    {
+      "dimension": "文件结构映射",
+      "max_score": 15,
+      "description": "每个 Task 是否映射到具体的文件路径，无 'floating task'",
+      "calibration": {
+        "excellent": "13-15：Task 与文件一一对应，所有 Task 创建/修改的文件均在 Plan 中明确声明",
+        "adequate": "9-12：大部分 Task 有文件映射，1-2 个 Task 缺少文件路径",
+        "poor": "0-8：多个 Task 未指定文件路径，Plan 无法引导 AI 工具创建/定位文件"
+      }
+    },
+    {
+      "dimension": "验收标准可测性",
+      "max_score": 15,
+      "description": "每个 Task 的 'done' 是否为客观可验证的判断标准",
+      "calibration": {
+        "excellent": "13-15：所有验收标准为可运行测试验证的条件，无主观判断",
+        "adequate": "9-12：大部分验收标准可测试，存在 1-2 个描述性而非测试性的 AC",
+        "poor": "0-8：验收标准大量为主观判断（如 '代码应该清晰'），AI 工具无法自我验证"
+      }
+    },
+    {
+      "dimension": "风险排序正确性",
+      "max_score": 20,
+      "description": "高风险/技术不确定的 Task 是否排在执行顺序的前列",
+      "calibration": {
+        "excellent": "18-20：技术风险最高的 Task 排在 MVP 的最前面，每个关键风险都有优先验证策略",
+        "adequate": "13-17：风险识别基本正确，但 1-2 个高风险 Task 被排在不合理的位置",
+        "poor": "0-12：关键风险被后排——若该 Task 失败将导致大量前置 Task 浪费"
+      }
+    }
+  ]
+}
