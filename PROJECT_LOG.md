@@ -2,8 +2,8 @@
 
 > 多 Agent 文档生成与代码审查工具 — Builder + 双 Reviewer 迭代闭环
 
-<!-- @@LAST_ANALYZED: 6081d40 @@-->
-<!-- 最后更新: 2026-05-25 02:00 — Code Review 后更新 -->
+<!-- @@LAST_ANALYZED: b1b337b @@-->
+<!-- 最后更新: 2026-05-30 21:00 — v0.4.4 全量更新 -->
 
 ---
 
@@ -372,7 +372,20 @@ orchestrator.run()
 
 ## 🔄 版本记录
 
-### v0.4.3 (当前) — 2026-05-25
+### v0.4.4 (当前) — 2026-05-30
+- **🔧 F-019: Reviewer A/B 并行化 ($#7)**: ThreadPoolExecutor 替代串行调用，~50% Review 耗时降低
+- **🔒 F-020: LLM 写入路径白名单 ($#7)**: write_file/edit_file 仅允许 projects/ 和 .transcripts/ 目录
+- **🔧 F-021: 评审历史增量缓存 ($#7)**: round-{N}-summary.txt，O(n)→O(1) LLM 调用
+- **🔧 F-023: auto_compact 降级回退 ($#7)**: LLM 摘要失败/太短时保留原始 messages
+- **🧹 F-024: 死代码清理 ($#7)**: 删除未被使用的 converge_check (186 行)；移除 consecutive_reviewer_failures 和 dir() hack
+- **🧪 测试新增 ($#7)**: loop.py (4 tests) + subagent.py (3 tests) 单元测试
+- **🔧 方案 A: 删除 Reviewer 后期倾向 ($#8)**: reviewer-context 中的「后期轮次更倾向接受」整句删除，与评分哲学一致
+- **🔧 方案 C: 评分一致性校验 ($#8)**: Reviewer Step 4 新增评分-评语一致性校验，总分<95 时强制自查
+- **✅ Bug 闭环**: B-011 (死代码) / B-012 (Reviewer traceback) / B-013 (dir() hack) 均已修复
+- **✅ 技术债务闭环**: TD-003 / TD-005 (Reviewer 并行) / TD-008 (路径白名单) 已解决
+- **0 open Issues, 0 open PRs**
+
+### v0.4.3 — 2026-05-25
 - **🐛 P0 修复: LLM 输出 null 导致进程崩溃 (#1)**: `raw.get("suggestions", [])` 在 JSON 值为 `null` 时返回 `None` → `len(None)` TypeError 崩溃。修复: `or []` 兜底 (review.py)
 - **🐛 P0 修复: --resume 忽略前轮反馈 (#1)**: `feedback` 未持久化到 `state.json`，resume 时 Builder 得到"没有反馈信息"。修复: state.json version 1→2, 新增 `feedback` 字段 (state.py, orchestrator.py)
 - **🔧 P1 修复: DeepSeek thinking 吃掉全部 max_tokens 预算 (#1)**: Builder 默认 max_tokens 8000→16000；subagent.py 检测 ThinkingBlock-only 响应后自动以 2x 重试；agent_loop 透传 `stop_reason`
@@ -424,16 +437,17 @@ orchestrator.run()
 
 | 指标 | 值 |
 |------|-----|
-| 当前版本 | v0.4.3 |
+| 当前版本 | v0.4.4 |
 | 代码模块 | 14 个源文件 (idea_code/) |
-| 测试文件 | 8 个 (单元 + 集成 + E2E) — 62 用例 |
+| 测试文件 | 9 个 (单元 + 集成 + E2E) — ~70 用例 |
 | 内置 Prompt 包 | 2 个 (requirements-dev-doc, requirements-research) |
 | 核心模型 | 可配置 (Anthropic / MiniMax / DeepSeek / GLM / Kimi) |
-| 活跃 Feature | 18 个 (F-001 ~ F-018) |
-| 已修复 Bug | 11 个 (B-001 ~ B-010 ✅, B-011 ~ B-014 待修) |
+| 活跃 Feature | 23 个 (F-001 ~ F-023) |
+| 已修复 Bug | 14 个 (B-001 ~ B-014) |
 | ADR 记录 | 11 个 (ADR-001 ~ ADR-011) |
-| 技术债务 | 8 项 (TD-001 ~ TD-008) |
-| 最新提交 | `6081d40` (Resume 评分确认 + Builder 独立 max_tokens) |
+| 技术债务 | 5 项 (TD-001~TD-002, TD-004, TD-006~TD-007) |
+| 最新提交 | `b1b337b` (安全加固 + Reviewer 并行 + 死代码清理) |
 | Git 钩子 | ✅ post-commit 已安装 |
-| 已关闭 Issue | 4 个 (#1 #2 #4 已关闭, #4 via PR #5) |
-| Code Review 评分 | 7.4/10 (架构 8/代码质量 7/错误处理 7.5/安全 7.5/测试 7/性能 7/文档 8) |
+| 已关闭 Issue | 5 个 (#1 #2 #4 #7 #8) |
+| 开放 Issue / PR | 0 |
+| Code Review 评分 | 7.6/10 (安全 +0.5, 性能 +0.2) |
