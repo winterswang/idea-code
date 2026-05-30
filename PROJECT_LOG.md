@@ -353,6 +353,21 @@ orchestrator.run()
 - **影响**: 用户明确控制 Builder 窗口；向后兼容（未设置时走共享值）
 - **状态**: 已落地
 
+### ADR-012: AI Coding 工具协同 — dev-plan 包
+- **日期**: 2026-05-30 (v0.5.0)
+- **背景**: Claude Code/Codex 需要结构化的执行计划来驱动项目开发，当前 idea-code 覆盖需求文档但缺乏开发执行环节
+- **决策**: 新增 `requirements-dev-plan` Prompt 包，从 requirements.md 生成 `execution_plan.md`
+  - **单一文件输出**: 架构概要 + 项目文件结构 + 执行顺序 + 任务列表
+  - **Task 粒度**: 20-60 min 一次聚焦编码会话，每个 Task 含接口契约（方法签名）+ 验收标准 + 测试策略
+  - **状态追踪**: [PENDING] / [IN_PROGRESS] / [DONE] — Claude Code 可 grep 读取
+  - **DAG 依赖**: 上游输出 = 下游输入，支持 fan-out / fan-in
+  - **风险优先**: 高风险/技术不确定的 Task 排在最前 — 早期验证可行性
+- **替代方案**: 
+  - 不做 — 失去 AI coding 工具集成的自然入口
+  - 嵌入现有 dev-doc 包 — 职责混乱，reviewer 维度不同
+- **影响**: 三个 Prompt 包构成完整链路: dev-doc (需求) → dev-plan (计划) → AI coding (执行)
+- **状态**: 开发中 (Phase 1 — Prompt 包设计)
+
 ---
 
 ## 🔧 技术债务
@@ -372,7 +387,17 @@ orchestrator.run()
 
 ## 🔄 版本记录
 
-### v0.4.4 (当前) — 2026-05-30
+### v0.5.0 (开发中) — 2026-05-30
+- **🚀 F-024: requirements-dev-plan Prompt 包**: 新增第三包，从 requirements.md 生成 execution_plan.md
+  - 单一输出文件，20-60 min Task 粒度
+  - 接口契约级（方法签名）+ DAG 依赖链 + 风险优先排序
+  - 内置执行状态追踪 (PENDING/IN_PROGRESS/DONE)
+  - Reviewer A (技术视角): 依赖链/接口契约/文件映射/验收可测/风险排序
+  - Reviewer B (执行视角): AI 可执行性/MVP 对齐/粒度/并行/渐进交付
+- **📐 ADR-012: AI Coding 工具协同开发**: Claude Code 可直接读取 execution_plan.md 顺序执行 Task
+- **设计文档**: 详见 PROJECT_LOG.md ADR-012
+
+### v0.4.4 — 2026-05-30
 - **🔧 F-019: Reviewer A/B 并行化 ($#7)**: ThreadPoolExecutor 替代串行调用，~50% Review 耗时降低
 - **🔒 F-020: LLM 写入路径白名单 ($#7)**: write_file/edit_file 仅允许 projects/ 和 .transcripts/ 目录
 - **🔧 F-021: 评审历史增量缓存 ($#7)**: round-{N}-summary.txt，O(n)→O(1) LLM 调用
@@ -437,17 +462,17 @@ orchestrator.run()
 
 | 指标 | 值 |
 |------|-----|
-| 当前版本 | v0.4.4 |
+| 当前版本 | v0.5.0-dev |
 | 代码模块 | 14 个源文件 (idea_code/) |
 | 测试文件 | 9 个 (单元 + 集成 + E2E) — ~70 用例 |
-| 内置 Prompt 包 | 2 个 (requirements-dev-doc, requirements-research) |
+| 内置 Prompt 包 | 3 个 (+ requirements-dev-plan, 开发中) |
 | 核心模型 | 可配置 (Anthropic / MiniMax / DeepSeek / GLM / Kimi) |
-| 活跃 Feature | 23 个 (F-001 ~ F-023) |
+| 活跃 Feature | 24 个 (F-001 ~ F-024) |
 | 已修复 Bug | 14 个 (B-001 ~ B-014) |
-| ADR 记录 | 11 个 (ADR-001 ~ ADR-011) |
+| ADR 记录 | 12 个 (ADR-001 ~ ADR-012) |
 | 技术债务 | 5 项 (TD-001~TD-002, TD-004, TD-006~TD-007) |
 | 最新提交 | `b1b337b` (安全加固 + Reviewer 并行 + 死代码清理) |
 | Git 钩子 | ✅ post-commit 已安装 |
 | 已关闭 Issue | 5 个 (#1 #2 #4 #7 #8) |
 | 开放 Issue / PR | 0 |
-| Code Review 评分 | 7.6/10 (安全 +0.5, 性能 +0.2) |
+| Code Review 评分 | 7.6/10 |
