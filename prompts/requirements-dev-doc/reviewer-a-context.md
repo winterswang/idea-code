@@ -8,7 +8,7 @@
 
 ---
 
-**迭代信息**：当前第 {round_num} / {max_rounds} 轮。后期轮次应更倾向接受已达到基本质量标准的文档，聚焦阻塞性问题而非微调。
+**迭代信息**：当前第 {round_num} / {max_rounds} 轮。
 
 {review_history_summary}
 
