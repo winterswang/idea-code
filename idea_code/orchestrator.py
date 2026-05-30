@@ -214,7 +214,7 @@ def run(
         else:
             print(f"错误: 输入文件不存在: {seed}")
             return False
-        slug = slugify(seed[:80])
+        slug = input_path.parent.name or slugify(seed[:50])
     else:
         slug = slugify(seed)
 
