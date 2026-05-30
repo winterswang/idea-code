@@ -178,80 +178,6 @@ def check_per_dimension_threshold(
     return len(failures) == 0, failures
 
 
-def converge_check(
-    score_a: int,
-    score_b: int,
-    threshold: int = 95,
-    intent_a: int | None = None,
-    intent_b: int | None = None,
-    intent_min: int | None = None,
-    dims_a: list[dict] | None = None,
-    dims_b: list[dict] | None = None,
-    scoring_a: list | None = None,
-    scoring_b: list | None = None,
-) -> dict:
-    """判定双 Reviewer 是否收敛。
-
-    三层检查：
-    1. 总分 >= threshold（必要条件）
-    2. 意图对齐 >= intent_min（独立门槛）
-    3. 每个维度 >= 75% 满分（逐维度门槛，可选）
-
-    Returns:
-        {"passed": bool, "total": bool, "intent": bool | None,
-         "per_dim": bool | None, "detail": str}
-    """
-    if intent_min is None:
-        intent_min = int(INTENT_MAX_SCORE * INTENT_MIN_RATIO)
-
-    total_ok = score_a >= threshold and score_b >= threshold
-    intent_ok = None
-
-    if intent_a is not None and intent_b is not None:
-        intent_ok = intent_a >= intent_min and intent_b >= intent_min
-    elif intent_a is not None:
-        intent_ok = intent_a >= intent_min
-    elif intent_b is not None:
-        intent_ok = intent_b >= intent_min
-
-    # 逐维度检查
-    per_dim_ok = None
-    per_dim_detail = ""
-    if dims_a is not None and dims_b is not None:
-        ok_a, fail_a = check_per_dimension_threshold(dims_a, scoring_a or [])
-        ok_b, fail_b = check_per_dimension_threshold(dims_b, scoring_b or [])
-        per_dim_ok = ok_a and ok_b
-        if not per_dim_ok:
-            parts = []
-            if fail_a:
-                parts.append(f"RevA: {'; '.join(fail_a)}")
-            if fail_b:
-                parts.append(f"RevB: {'; '.join(fail_b)}")
-            per_dim_detail = " | ".join(parts)
-
-    passed = total_ok and (intent_ok if intent_ok is not None else True)
-    if per_dim_ok is not None:
-        passed = passed and per_dim_ok
-
-    # 构建人类可读的详情
-    parts = []
-    if not total_ok:
-        parts.append(f"总分未达标 (A={score_a}, B={score_b}, 需>= {threshold})")
-    if intent_ok is False:
-        parts.append(f"意图对齐未达标 (需>= {intent_min}/{INTENT_MAX_SCORE})")
-    if per_dim_ok is False:
-        parts.append(f"逐维度未达标: {per_dim_detail}")
-
-    return {
-        "passed": passed,
-        "total": total_ok,
-        "intent": intent_ok,
-        "per_dim": per_dim_ok,
-        "per_dim_detail": per_dim_detail,
-        "detail": "; ".join(parts) if parts else "全部通过",
-    }
-
-
 def merge_feedback(review_a: ReviewResult, review_b: ReviewResult) -> str:
     """合并两个 Reviewer 的反馈，生成给 Builder 的综合输入。
 
@@ -378,16 +304,22 @@ def scoring_table_to_markdown(scoring: list, philosophy: str = "") -> str:
     return "\n".join(lines)
 
 
-def compact_review_history(records: list[dict], ctx) -> str:
+def compact_review_history(records: list[dict] | str, ctx) -> str:
     """LLM 压缩 N 轮评审历史为结构化摘要。
 
-    records: [{"round": 1, "reviewer_a": {...}, "reviewer_b": {...}}, ...]
+    支持两种输入：
+    - records: [{"round": N, ...}, ...] — 直接序列化
+    - records: str — 预格式化的文本（增量缓存用）
+    
     ctx: AgentContext (model/client)
     """
     if not records:
         return ""
 
-    records_text = _json.dumps(records, indent=2, ensure_ascii=False)
+    if isinstance(records, str):
+        records_text = records
+    else:
+        records_text = _json.dumps(records, indent=2, ensure_ascii=False)
     prompt = f"""你是评审信息压缩器。将以下 N 轮双 Reviewer 评审记录压缩为"历史评审摘要"。
 
 压缩要求（上限 1000 字）：
